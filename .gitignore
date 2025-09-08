@@ -1,0 +1,38 @@
+# --- Environment files ---
+.env
+*.env
+
+# --- Python cache ---
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# --- Virtual environments ---
+.venv/
+env/
+venv/
+
+# --- Editor / IDE configs ---
+.vscode/
+.idea/
+
+# --- Logs ---
+*.log
+
+# --- Docker volumes ---
+pgdata/
+redisdata/
+
+# --- Test cache ---
+.pytest_cache/
+.tox/
+.coverage
+htmlcov/
+
+# --- Jupyter / notebooks (если появятся) ---
+*.ipynb_checkpoints
+
+# --- SQL dumps ---
+*.sql
+!sql/seed_initial.sql

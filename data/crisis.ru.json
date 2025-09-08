@@ -1,0 +1,50 @@
+[
+  {
+    "phrase": "не хочу жить",
+    "severity": 3,
+    "help": "Вы не один. Позвоните 112 или на линию доверия.",
+    "help_url": "https://988lifeline.org/"
+  },
+  {
+    "phrase": "покончу с собой",
+    "severity": 3,
+    "help": "Пожалуйста, обратитесь за срочной помощью: 112.",
+    "help_url": "https://988lifeline.org/"
+  },
+  {
+    "phrase": "хочу умереть",
+    "severity": 3,
+    "help": "Сейчас важно поговорить с живым человеком.",
+    "help_url": "https://988lifeline.org/"
+  },
+  {
+    "phrase": "не вижу выхода",
+    "severity": 2,
+    "help": "Давайте сузим шаг до самого маленького.",
+    "help_url": "https://988lifeline.org/"
+  },
+  {
+    "phrase": "нет смысла жить",
+    "severity": 2,
+    "help": "Это может быть очень тяжело. Обратитесь за помощью.",
+    "help_url": "https://988lifeline.org/"
+  },
+  {
+    "phrase": "я не выдержу",
+    "severity": 2,
+    "help": "Пожалуйста, позвоните 112 — вам готовы помочь.",
+    "help_url": "https://988lifeline.org/"
+  },
+  {
+    "phrase": "устал жить",
+    "severity": 2,
+    "help": "Это похоже на истощение. Поддержка доступна.",
+    "help_url": "https://988lifeline.org/"
+  },
+  {
+    "phrase": "хочу исчезнуть",
+    "severity": 2,
+    "help": "Вы важны. Пожалуйста, оставайтесь с нами.",
+    "help_url": "https://988lifeline.org/"
+  }
+]

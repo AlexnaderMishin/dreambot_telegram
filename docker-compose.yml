@@ -1,0 +1,49 @@
+services:
+  db:
+    image: postgres:16
+    env_file: .env
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 3s
+      timeout: 3s
+      retries: 30
+
+  redis:
+    image: redis:7
+    volumes:
+      - redisdata:/data
+
+  api:
+    build: .
+    env_file: .env
+    command: bash -lc "python scripts/wait_for_db.py && alembic upgrade head && uvicorn app.api.main:app --host 0.0.0.0 --port 8000"
+    ports:
+      - "8000:8000"
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_started
+
+  bot:
+    build: .
+    env_file: .env
+    command: bash -lc "python scripts/wait_for_db.py && alembic upgrade head && python -m app.bot.main"
+    depends_on:
+      db:
+        condition: service_healthy
+      api:
+        condition: service_started
+      redis:
+        condition: service_started
+    environment:
+      OPENAI_API_KEY: ${OPENAI_API_KEY}
+      PREMIUM_MODE: ${PREMIUM_MODE}
+      OPENAI_MODEL: ${OPENAI_MODEL}
+      OPENAI_TIMEOUT: ${OPENAI_TIMEOUT}
+
+volumes:
+  pgdata:
+  redisdata:

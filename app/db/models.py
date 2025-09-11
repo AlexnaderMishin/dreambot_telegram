@@ -8,24 +8,33 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 from sqlalchemy.dialects.postgresql import JSONB, TIMESTAMP
 
 from .base import Base
-
+from sqlalchemy import (
+    Column, Integer, String, DateTime, Boolean, ForeignKey, BigInteger, func
+)
+from sqlalchemy.orm import declarative_base
+Base = declarative_base()
 class User(Base):
     __tablename__ = "users"
 
-    id: Mapped[int] = mapped_column(primary_key=True)
-    tg_id: Mapped[int] = mapped_column(sa.BigInteger, unique=True, index=True, nullable=False)
-    username: Mapped[Optional[str]] = mapped_column(sa.String(64))
-    tz: Mapped[str] = mapped_column(sa.String(64), default="Europe/Moscow", nullable=False)
+    id = Column(Integer, primary_key=True)
+    tg_id = Column(BigInteger, unique=True, index=True, nullable=False)
+    username = Column(String(64))
+    tz = Column(String(64), nullable=False, server_default="Europe/Moscow")
+    is_premium = Column(Boolean, nullable=False, server_default="false")
+    created_at = Column(DateTime(timezone=True), nullable=False, server_default=func.now())
+    remind_enabled = Column(Boolean, nullable=False, server_default="false")
+    premium_expires_at = Column(DateTime(timezone=True), nullable=True)
 
-    is_premium: Mapped[bool] = mapped_column(sa.Boolean, default=False, nullable=False, server_default=sa.false())
-    remind_enabled: Mapped[bool] = mapped_column(sa.Boolean, default=False, nullable=False, server_default=sa.false())
-
-    created_at: Mapped[datetime] = mapped_column(
-        sa.TIMESTAMP(timezone=True), server_default=sa.func.now(), nullable=False
+    # >>> ДОБАВЬ ЭТУ СТРОКУ (встречная связь для платежей)
+    payments = relationship(
+        "Payment",
+        back_populates="user",
+        cascade="all, delete-orphan",
+        passive_deletes=True,
     )
 
     dreams: Mapped[List["Dream"]] = relationship(back_populates="user")
-
+   
 class Dream(Base):
     __tablename__ = "dreams"
     id: Mapped[int] = mapped_column(primary_key=True)
@@ -38,6 +47,22 @@ class Dream(Base):
     created_at: Mapped[datetime] = mapped_column(TIMESTAMP(timezone=True), default=datetime.utcnow)
 
     user: Mapped["User"] = relationship(back_populates="dreams")
+
+payments = relationship("Payment", back_populates="user", cascade="all, delete-orphan")
+
+class Payment(Base):
+    __tablename__ = "payments"
+
+    id = Column(Integer, primary_key=True)
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    provider = Column(String(50), nullable=True)
+    payload = Column(String(255), nullable=True)
+    currency = Column(String(10), nullable=True)
+    total_amount = Column(Integer, nullable=True)  # в копейках
+    created_at = Column(DateTime(timezone=True), nullable=False, server_default=func.now())
+
+    # >>> ВСТРЕЧНАЯ СВЯЗЬ (должна совпадать по названию с тем, что добавили в User)
+    user = relationship("User", back_populates="payments")
 
 class Symbol(Base):
     __tablename__ = "symbols"
@@ -54,3 +79,4 @@ class CrisisKeyword(Base):
     severity: Mapped[int] = mapped_column()  # 1..3
     help_url: Mapped[Optional[str]] = mapped_column(String(512), nullable=True)
     created_at: Mapped[datetime] = mapped_column(TIMESTAMP(timezone=True), default=datetime.utcnow)
+

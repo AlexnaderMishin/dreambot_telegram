@@ -198,9 +198,9 @@ async def main() -> None:
     dp = Dispatcher()
 
     # Роуты
-    dp.include_router(router)
-    dp.include_router(payments_router)
-    dp.include_router(remind_router)  # <-- реальный роутер напоминаний
+    dp.include_router(payments_router)   # инвойсы/оплата
+    dp.include_router(remind_router)     # напоминания (важно: до «главного»!)
+    dp.include_router(router)            # главный роутер с catch-all — в самом конце
 
     # Сначала чистим вебхук и апдейты
     await bot.delete_webhook(drop_pending_updates=True)

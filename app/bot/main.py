@@ -195,21 +195,25 @@ async def main() -> None:
         raise RuntimeError("BOT_TOKEN is not set")
 
     dp = Dispatcher()
-    # основная логика
+
+    # Роуты
     dp.include_router(router)
-    # логика платежей (кнопка «Премиум», инвойсы, success и т.п.)
     dp.include_router(payments_router)
-    dp.include_router(remind_router)    # напоминания
+    dp.include_router(remind_router)  # кнопка «Напоминания»
 
-    bot = Bot(token, default=DefaultBotProperties(parse_mode=ParseMode.HTML))
-
+    # Старт планировщика — один раз до планирования задач
     if not scheduler.running:
         scheduler.start()
 
+    # Чистим вебхук и сбрасываем накопленные апдейты
     await bot.delete_webhook(drop_pending_updates=True)
-    # Поднять запланированные задачи для уже существующих пользователей
-    await bootstrap_existing(bot)
+
+    # <-- ВАЖНО: это обычная функция, без await
+    bootstrap_existing(bot)
+
+    # Поллинг запускаем ОДИН раз и в самом конце
     await dp.start_polling(bot)
+
 
 if __name__ == "__main__":
     import asyncio

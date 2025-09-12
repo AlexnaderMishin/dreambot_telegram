@@ -19,6 +19,10 @@ from app.db.models import User, Dream
 
 # --- платежи (роутер для invoice/callbacks) ---
 from app.bot.handlers.payments import router as payments_router
+
+# уведомления
+from app.bot.handlers.remind import router as remind_router
+from app.bot.reminders import scheduler, bootstrap_existing
 # ===================== FSM-состояния =====================
 
 class DreamForm(StatesGroup):
@@ -195,9 +199,16 @@ async def main() -> None:
     dp.include_router(router)
     # логика платежей (кнопка «Премиум», инвойсы, success и т.п.)
     dp.include_router(payments_router)
+    dp.include_router(remind_router)    # напоминания
 
     bot = Bot(token, default=DefaultBotProperties(parse_mode=ParseMode.HTML))
+
+    if not scheduler.running:
+        scheduler.start()
+
     await bot.delete_webhook(drop_pending_updates=True)
+    # Поднять запланированные задачи для уже существующих пользователей
+    await bootstrap_existing(bot)
     await dp.start_polling(bot)
 
 if __name__ == "__main__":

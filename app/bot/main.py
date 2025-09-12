@@ -159,9 +159,9 @@ async def btn_stats(m: Message) -> None:
     await m.answer("Статистика скоро появится в премиум-версии.", reply_markup=main_kb())
 
 
-@router.message(F.text == "🔔 Напоминания")
-async def btn_reminders(m: Message) -> None:
-    await m.answer("Напоминания можно настроить в следующем релизе.", reply_markup=main_kb())
+# @router.message(F.text == "🔔 Напоминания")
+# async def btn_reminders(m: Message) -> None:
+#     await m.answer("Напоминания можно настроить в следующем релизе.", reply_markup=main_kb())
 
 
 @router.message(F.text == "⭐ Премиум")
@@ -194,24 +194,25 @@ async def main() -> None:
     if not token:
         raise RuntimeError("BOT_TOKEN is not set")
 
+    bot = Bot(token=token, default=DefaultBotProperties(parse_mode=ParseMode.HTML))
     dp = Dispatcher()
 
     # Роуты
     dp.include_router(router)
     dp.include_router(payments_router)
-    dp.include_router(remind_router)  # кнопка «Напоминания»
+    dp.include_router(remind_router)  # <-- реальный роутер напоминаний
 
-    # Старт планировщика — один раз до планирования задач
+    # Сначала чистим вебхук и апдейты
+    await bot.delete_webhook(drop_pending_updates=True)
+
+    # Стартуем планировщик один раз
     if not scheduler.running:
         scheduler.start()
 
-    # Чистим вебхук и сбрасываем накопленные апдейты
-    await bot.delete_webhook(drop_pending_updates=True)
-
-    # <-- ВАЖНО: это обычная функция, без await
+    # ВОЗВРАЩАЕМ задачи из БД (ЭТА ФУНКЦИЯ СИНХРОННАЯ — БЕЗ await!)
     bootstrap_existing(bot)
 
-    # Поллинг запускаем ОДИН раз и в самом конце
+    # И только после этого — поллинг
     await dp.start_polling(bot)
 
 

@@ -53,7 +53,7 @@ class Dream(Base):
 
     user: Mapped["User"] = relationship(back_populates="dreams")
 
-payments = relationship("Payment", back_populates="user", cascade="all, delete-orphan")
+
 
 class Payment(Base):
     __tablename__ = "payments"

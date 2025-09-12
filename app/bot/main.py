@@ -1,7 +1,8 @@
 import os
+import asyncio
 from typing import Optional, List
-
-from aiogram import Bot, Dispatcher, F, Router
+from aiogram import Router
+from aiogram import Bot, Dispatcher, F
 from aiogram.filters import Command
 from aiogram.enums import ParseMode
 from aiogram.client.default import DefaultBotProperties
@@ -9,23 +10,25 @@ from aiogram.types import Message
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
 
-from app.bot.ui import main_kb, HELP_TEXT, kb_premium  # <— добавили kb_premium
+from app.bot.ui import main_kb, HELP_TEXT, kb_premium
 
-# --- ваше ядро/модели/анализ ---
+# ядро / анализ / БД
 from app.core.nlp import analyze_dream, Analysis
 from app.core.premium import premium_analysis
 from app.db.base import SessionLocal
 from app.db.models import User, Dream
 
-# --- платежи (роутер для invoice/callbacks) ---
+# платежи
 from app.bot.handlers.payments import router as payments_router
 
-# уведомления
-from app.bot.handlers.remind import router as remind_router
-from app.bot.handlers.remind import remind_router 
+# напоминания
+# from app.bot.handlers.remind import router as remind_router
+from app.bot.handlers.remind import remind_router
 from app.bot.reminders import scheduler, bootstrap_existing
 
-from app.bot.handlers import router as main_router
+# основной роутер приложения
+
+# from app.bot.handlers.main import router as main_router
 # ===================== FSM-состояния =====================
 
 class DreamForm(StatesGroup):
@@ -197,25 +200,26 @@ async def main() -> None:
     if not token:
         raise RuntimeError("BOT_TOKEN is not set")
 
-    bot = Bot(token=token, default=ParseMode.HTML)
+    bot = Bot(token, default=DefaultBotProperties(parse_mode=ParseMode.HTML))
     dp = Dispatcher()
 
-    # порядок имеет значение:
-    dp.include_router(main_router)        # ваша «основная логика»
-    dp.include_router(payments_router)    # платежи
-    dp.include_router(remind_router)      # <<< напоминания — до любых фолбэков!
+# роутеры
+    
+    dp.include_router(payments_router)
+    dp.include_router(remind_router)  # кнопка «Напоминания»
+    dp.include_router(router) 
 
-    # чистим вебхук и апдейты
+# webhooks off
     await bot.delete_webhook(drop_pending_updates=True)
 
-    # стартуем планировщик один раз
+# планировщик поднимаем один раз
     if not scheduler.running:
         scheduler.start()
 
-    # восстанавливаем задачи из БД (синхронная функция, БЕЗ await)
+# поднимаем задачи из БД (синхронная, БЕЗ await)
     bootstrap_existing(bot)
 
-    # запуск поллинга
+# poll
     await dp.start_polling(bot)
 
 if __name__ == "__main__":

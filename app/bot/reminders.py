@@ -1,92 +1,87 @@
-from aiogram import Router, F, types
-from aiogram.filters import Command
-from aiogram.types import ReplyKeyboardMarkup, KeyboardButton
+# app/bot/reminders.py
+from __future__ import annotations
+
+from aiogram import Bot
+from apscheduler.schedulers.asyncio import AsyncIOScheduler
+from apscheduler.triggers.cron import CronTrigger
 from sqlalchemy import text
 from app.db.base import SessionLocal
-from app.db.models import User
-from app.bot.reminders import schedule_for_user, unschedule_for_user, toggle_remind
 
-router = Router()
+import pytz
 
-REMIND_BTN = "🔔 Напоминания"
+scheduler = AsyncIOScheduler(timezone="UTC")
+JOB_PREFIX = "remind_user_"
 
-def _kb_remind_menu() -> ReplyKeyboardMarkup:
-    return ReplyKeyboardMarkup(
-        keyboard=[
-            [KeyboardButton(text="Включить") , KeyboardButton(text="Выключить")],
-            [KeyboardButton(text="Поставить время")],
-        ],
-        resize_keyboard=True
+
+def _job_id(user_id: int) -> str:
+    return f"{JOB_PREFIX}{user_id}"
+
+
+async def send_reminder(bot: Bot, chat_id: int) -> None:
+    await bot.send_message(chat_id, "🌤 Доброе утро! Запишите сон, если помните. /help")
+
+
+def schedule_for_user(bot: Bot, user_id: int, tg_id: int, tz: str, t_str: str) -> None:
+    """
+    Создаём (или пере-создаём) задачу будильника для пользователя.
+    t_str: строка HH:MM в его локальном часовом поясе.
+    """
+    # если была старая — удаляем молча
+    try:
+        scheduler.remove_job(_job_id(user_id))
+    except Exception:
+        pass
+
+    # разложим время
+    hh, mm = map(int, t_str.split(":", 1))
+
+    # таймзона пользователя
+    user_tz = pytz.timezone(tz or "UTC")
+
+    trigger = CronTrigger(hour=hh, minute=mm, timezone=user_tz)
+    scheduler.add_job(
+        send_reminder,
+        trigger=trigger,
+        args=[bot, tg_id],
+        id=_job_id(user_id),
+        replace_existing=True,
     )
 
-async def show_remind_menu(message: types.Message):
-    # проверяем, что юзер есть
-    with SessionLocal() as s:
-        u = s.query(User).filter(User.tg_id==message.from_user.id).first()
-        if not u:
-            await message.answer("Сначала /start.", reply_markup=None)
-            return
-    await message.answer("Напоминания. Выберите действие:", reply_markup=_kb_remind_menu())
 
-@router.message(Command("remind"))
-@router.message(F.text == REMIND_BTN)           # <- ловим кнопку
-async def remind_entry(message: types.Message):
-    await show_remind_menu(message)
-
-@router.message(F.text.lower().in_({"включить"}))
-async def remind_on(message: types.Message):
-    with SessionLocal() as s:
-        u = s.query(User).filter(User.tg_id==message.from_user.id).first()
-        if not u:
-            await message.answer("Сначала /start.")
-            return
-        toggle_remind(u.id, True)
-    # 08:30 по умолчанию, если времени нет
-    await schedule_for_user(message.bot, u.id, u.tg_id, u.tz or "Europe/Moscow")
-    await message.answer("Напоминания включены. По умолчанию — 08:30.")
-
-@router.message(F.text.lower().in_({"выключить"}))
-async def remind_off(message: types.Message):
-    with SessionLocal() as s:
-        u = s.query(User).filter(User.tg_id==message.from_user.id).first()
-        if not u:
-            await message.answer("Сначала /start.")
-            return
-        toggle_remind(u.id, False)
-    unschedule_for_user(message.from_user.id)
-    await message.answer("Напоминания выключены.")
-
-@router.message(F.text == "Поставить время")
-async def ask_time(message: types.Message):
-    await message.answer("Напишите время в формате ЧЧ:ММ (например, 09:20).")
-
-@router.message(F.text.regexp(r"^\s*\d{1,2}:\d{2}\s*$"))
-async def set_time(message: types.Message):
-    raw = message.text.strip()
-    hh, mm = raw.split(":")
+def unschedule_for_user(user_id: int) -> None:
     try:
-        hh = int(hh); mm = int(mm)
-        if not (0 <= hh <= 23 and 0 <= mm <= 59):
-            raise ValueError
+        scheduler.remove_job(_job_id(user_id))
     except Exception:
-        await message.answer("Неверный формат времени. Пример: 09:20")
-        return
+        pass
 
+
+def bootstrap_existing(bot: Bot) -> None:
+    """
+    Поднимаем задачи из БД для всех, у кого remind_enabled = true.
+    ВАЖНО: это синхронная функция, её вызываем БЕЗ await.
+    """
     with SessionLocal() as s:
-        u = s.query(User).filter(User.tg_id==message.from_user.id).first()
-        if not u:
-            await message.answer("Сначала /start.")
-            return
-        # сохраняем время в БД
-        from datetime import time as dtime
-        u.remind_time = dtime(hh, mm)
+        rows = s.execute(
+            text(
+                """
+                SELECT id, tg_id, tz
+                FROM users
+                WHERE remind_enabled = true
+                """
+            )
+        ).fetchall()
+
+    for r in rows:
+        # в БД хранится часовой пояс, а время может быть в колонке remind_time (при желании подтяни)
+        # запускаем на дефолтное 08:30, если у пользователя ещё нет времени.
+        t_str = "08:30"
+        schedule_for_user(bot, r.id, r.tg_id, r.tz, t_str)
+
+
+def toggle_remind(user_id: int, enabled: bool) -> None:
+    with SessionLocal() as s:
+        s.execute(
+            text("UPDATE users SET remind_enabled = :e WHERE id = :id"),
+            {"e": enabled, "id": user_id},
+        )
         s.commit()
-
-    # пересоздадим задачу
-    await message.answer(f"Время напоминания установлено: {hh:02d}:{mm:02d}.")
-    with SessionLocal() as s:
-        u = s.query(User).filter(User.tg_id==message.from_user.id).first()
-        if u and u.remind_enabled:
-            unschedule_for_user(u.id)
-            await schedule_for_user(message.bot, u.id, u.tg_id, u.tz or "Europe/Moscow")
-            await message.answer("Расписание обновлено.")

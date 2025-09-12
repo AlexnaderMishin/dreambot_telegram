@@ -2,6 +2,10 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Optional, List
 
+#испорты reminds
+from sqlalchemy import Time
+from datetime import time
+
 import sqlalchemy as sa 
 from sqlalchemy import BigInteger, Boolean, ForeignKey, String, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
@@ -24,6 +28,7 @@ class User(Base):
     created_at = Column(DateTime(timezone=True), nullable=False, server_default=func.now())
     remind_enabled = Column(Boolean, nullable=False, server_default="false")
     premium_expires_at = Column(DateTime(timezone=True), nullable=True)
+    remind_time = Column(Time, nullable=True, default=time(8, 30))  # локальное время пользователя
 
     # >>> ДОБАВЬ ЭТУ СТРОКУ (встречная связь для платежей)
     payments = relationship(

@@ -1,123 +1,107 @@
 # app/bot/handlers/remind.py
-from __future__ import annotations
-
-import re
-from datetime import time as dtime
-
 from aiogram import Router, F, types
-from aiogram.fsm.state import StatesGroup, State
-from aiogram.fsm.context import FSMContext
+from aiogram.filters import Command
+from aiogram.types import ReplyKeyboardMarkup, KeyboardButton
 
+from sqlalchemy import text
 from app.db.base import SessionLocal
 from app.db.models import User
+
+# функции планировщика/перезапуска задач
 from app.bot.reminders import (
     schedule_for_user,
     unschedule_for_user,
     toggle_remind,
-    scheduler,  # чтобы не вызывать второй раз start()
 )
+
+# чтобы текст кнопки совпадал на 100% — берём из одного источника
+from app.bot.ui import main_kb, HELP_TEXT  # только для /remind, возврата и подсказок
+from app.bot.ui import REMIND_BTN  # <<< ВАЖНО: единый текст кнопки "🔔 Напоминания"
 
 router = Router()
 
+def _kb_remind_menu() -> ReplyKeyboardMarkup:
+    kb = [[
+        KeyboardButton(text="Включить"),
+        KeyboardButton(text="Выключить"),
+    ], [
+        KeyboardButton(text="Поставить время")
+    ]]
+    return ReplyKeyboardMarkup(keyboard=kb, resize_keyboard=True)
 
-class RemindForm(StatesGroup):
-    wait_time = State()
-
-
-def _fmt_time(t: dtime | None) -> str:
-    if not t:
-        return "не задано (по умолчанию 08:30)"
-    return f"{t.hour:02d}:{t.minute:02d}"
-
-
-def _parse_any_time(text: str) -> dtime | None:
-    """
-    Принимает '8', '08', '8:5', '8:05', '08:05', '23:59', '0:0', '00:00'.
-    Возвращает datetime.time или None, если не похоже на время.
-    """
-    text = text.strip()
-    if text.lower() in {"off", "выкл", "выключить"}:
-        return None
-
-    # 8 -> 08:00 ; 8:5 -> 08:05
-    m = re.fullmatch(r"(\d{1,2})(?::(\d{1,2}))?$", text)
-    if not m:
-        return dtime(99, 99)  # маркер "невалидное"
-
-    h = int(m.group(1))
-    mm = int(m.group(2) or 0)
-    if 0 <= h <= 23 and 0 <= mm <= 59:
-        return dtime(h, mm)
-    return dtime(99, 99)
-
-
-@router.message(F.text == "🔔 Напоминания")
-async def reminders_entry(m: types.Message, state: FSMContext):
-    # показываем текущее состояние и просим указать новое время
+async def _ensure_user(message: types.Message) -> User | None:
     with SessionLocal() as s:
-        user = s.query(User).filter_by(tg_id=m.from_user.id).first()
+        u = s.query(User).filter(User.tg_id == message.from_user.id).first()
+        if not u:
+            await message.answer("Сначала /start.")
+            return None
+        return u
 
-    if not user:
-        await m.answer("Сначала /start.")
+async def _show_menu(message: types.Message):
+    await message.answer("🔔 Напоминания.\nВыберите действие:", reply_markup=_kb_remind_menu())
+
+@router.message(Command("remind"))
+@router.message(F.text == REMIND_BTN)  # ловим нажатие кнопки из главного меню
+async def remind_entry(message: types.Message):
+    u = await _ensure_user(message)
+    if not u:
+        return
+    await _show_menu(message)
+
+@router.message(F.text.casefold() == "включить")
+async def remind_on(message: types.Message):
+    u = await _ensure_user(message)
+    if not u:
+        return
+    toggle_remind(u.id, True)
+
+    # если времени нет — используем значение по умолчанию из модели (08:30)
+    await schedule_for_user(message.bot, u.id, u.tg_id, u.tz or "Europe/Moscow")
+    await message.answer("✅ Напоминания включены. По умолчанию — 08:30.")
+
+@router.message(F.text.casefold() == "выключить")
+async def remind_off(message: types.Message):
+    u = await _ensure_user(message)
+    if not u:
+        return
+    toggle_remind(u.id, False)
+    unschedule_for_user(u.id)
+    await message.answer("🔕 Напоминания выключены.")
+
+@router.message(F.text == "Поставить время")
+async def ask_time(message: types.Message):
+    await message.answer("Напишите время в формате ЧЧ:ММ (например, 09:20).")
+
+@router.message(F.text.regexp(r"^\s*\d{1,2}:\d{2}\s*$"))
+async def set_time(message: types.Message):
+    u = await _ensure_user(message)
+    if not u:
         return
 
-    status = "включены ✅" if user.remind_enabled else "выключены ⛔️"
-    cur = _fmt_time(user.remind_time)
-    tz = user.tz or "UTC"
-    await m.answer(
-        "🔔 *Напоминания*\n"
-        f"Сейчас: {status}\n"
-        f"Время: *{cur}* (ваш часовой пояс: *{tz}*)\n\n"
-        "Отправьте время в формате `чч:мм` (например, `07:30` или просто `7` = 07:00),\n"
-        "или отправьте `off`, чтобы выключить напоминания.",
-        parse_mode="Markdown",
-    )
-    await state.set_state(RemindForm.wait_time)
+    raw = message.text.strip()
+    hh, mm = raw.split(":")
+    try:
+        hh = int(hh)
+        mm = int(mm)
+        if not (0 <= hh <= 23 and 0 <= mm <= 59):
+            raise ValueError
+    except Exception:
+        await message.answer("Неверный формат времени. Пример: 09:20")
+        return
 
-
-@router.message(RemindForm.wait_time)
-async def reminders_set_time(m: types.Message, state: FSMContext):
+    from datetime import time as dtime
     with SessionLocal() as s:
-        user = s.query(User).filter_by(tg_id=m.from_user.id).first()
-
-    if not user:
-        await m.answer("Сначала /start.")
-        await state.clear()
-        return
-
-    t = _parse_any_time(m.text or "")
-    # off → выключаем
-    if t is None:
-        toggle_remind(user.id, False)
-        unschedule_for_user(user.id)
-        await m.answer("🔕 Напоминания *выключены*.", parse_mode="Markdown")
-        await state.clear()
-        return
-
-    # ошибка формата
-    if t.hour == 99:
-        await m.answer("Похоже, это не время. Пример: `07:30` или `21`.", parse_mode="Markdown")
-        return
-
-    # сохраняем время и включаем
-    with SessionLocal() as s:
-        db_user = s.query(User).filter_by(id=user.id).first()
-        db_user.remind_time = t
-        db_user.remind_enabled = True
+        u = s.query(User).filter(User.tg_id == message.from_user.id).first()
+        u.remind_time = dtime(hh, mm)
         s.commit()
 
-        # берём актуальные значения
-        tz = db_user.tz or "UTC"
-        schedule_for_user(
-            bot=m.bot,
-            user_id=db_user.id,
-            tg_id=db_user.tg_id,
-            tz=tz,
-            remind_time=db_user.remind_time,
-        )
+    # пере-создадим задачу, если включена
+    with SessionLocal() as s:
+        u = s.query(User).filter(User.tg_id == message.from_user.id).first()
+        if u and u.remind_enabled:
+            unschedule_for_user(u.id)
+            await schedule_for_user(message.bot, u.id, u.tg_id, u.tz or "Europe/Moscow")
+    await message.answer(f"⏰ Время напоминания установлено: {hh:02d}:{mm:02d}.")
 
-    await m.answer(
-        f"🔔 Готово! Буду напоминать ежедневно в *{t.hour:02d}:{t.minute:02d}* по вашему поясу.",
-        parse_mode="Markdown",
-    )
-    await state.clear()
+# экспортируем под ожидаемым именем
+remind_router = router

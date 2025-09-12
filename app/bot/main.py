@@ -22,7 +22,10 @@ from app.bot.handlers.payments import router as payments_router
 
 # уведомления
 from app.bot.handlers.remind import router as remind_router
+from app.bot.handlers.remind import remind_router 
 from app.bot.reminders import scheduler, bootstrap_existing
+
+from app.bot.handlers import router as main_router
 # ===================== FSM-состояния =====================
 
 class DreamForm(StatesGroup):
@@ -194,30 +197,28 @@ async def main() -> None:
     if not token:
         raise RuntimeError("BOT_TOKEN is not set")
 
-    bot = Bot(token=token, default=DefaultBotProperties(parse_mode=ParseMode.HTML))
+    bot = Bot(token=token, default=ParseMode.HTML)
     dp = Dispatcher()
 
-    # Роуты
-    dp.include_router(payments_router)   # инвойсы/оплата
-    dp.include_router(remind_router)     # напоминания (важно: до «главного»!)
-    dp.include_router(router)            # главный роутер с catch-all — в самом конце
+    # порядок имеет значение:
+    dp.include_router(main_router)        # ваша «основная логика»
+    dp.include_router(payments_router)    # платежи
+    dp.include_router(remind_router)      # <<< напоминания — до любых фолбэков!
 
-    # Сначала чистим вебхук и апдейты
+    # чистим вебхук и апдейты
     await bot.delete_webhook(drop_pending_updates=True)
 
-    # Стартуем планировщик один раз
+    # стартуем планировщик один раз
     if not scheduler.running:
         scheduler.start()
 
-    # ВОЗВРАЩАЕМ задачи из БД (ЭТА ФУНКЦИЯ СИНХРОННАЯ — БЕЗ await!)
+    # восстанавливаем задачи из БД (синхронная функция, БЕЗ await)
     bootstrap_existing(bot)
 
-    # И только после этого — поллинг
+    # запуск поллинга
     await dp.start_polling(bot)
 
-
 if __name__ == "__main__":
-    import asyncio
     asyncio.run(main())
 
 

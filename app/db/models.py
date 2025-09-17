@@ -1,7 +1,7 @@
 from __future__ import annotations
 from datetime import datetime
 from typing import Optional, List
-
+from sqlalchemy.sql import func, text
 #испорты reminds
 from sqlalchemy import Time
 from datetime import time
@@ -24,7 +24,7 @@ class User(Base):
     tg_id = Column(BigInteger, unique=True, index=True, nullable=False)
     username = Column(String(64))
     tz = Column(String(64), nullable=False, server_default="Europe/Moscow")
-    is_premium = Column(Boolean, nullable=False, server_default="false")
+    is_premium = Column(Boolean, nullable=False, default=True, server_default=text("true"))
     created_at = Column(DateTime(timezone=True), nullable=False, server_default=func.now())
     remind_enabled = Column(Boolean, nullable=False, server_default="false")
     premium_expires_at = Column(DateTime(timezone=True), nullable=True)

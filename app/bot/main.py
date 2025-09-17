@@ -23,6 +23,8 @@ from app.bot.reminders import scheduler, bootstrap_existing
 from app.bot.handlers.dreams import router as dreams_router
 # статистика
 from app.bot.handlers.stats import router as stats_router
+#нумерология
+from app.bot.handlers import numerology
 
 class DreamForm(StatesGroup):
     awaiting_text = State()
@@ -118,7 +120,7 @@ async def btn_premium(m: Message) -> None:
 @router.message(F.text)
 async def fallback_show_menu(m: Message, state: FSMContext) -> None:
     cur = await state.get_state()
-    if cur == DreamForm.awaiting_text.state:
+    if cur:  # если пользователь в ЛЮБОМ состоянии (в т.ч. нумерология) — не мешаем
         return
     await m.answer("Выберите действие:", reply_markup=main_kb())
 
@@ -133,6 +135,7 @@ async def main() -> None:
     dp.include_router(payments_router)
     dp.include_router(stats_router)
     dp.include_router(dreams_router)
+    dp.include_router(numerology.router)
     dp.include_router(remind_router)
     dp.include_router(router)
 

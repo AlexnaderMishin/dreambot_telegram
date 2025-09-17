@@ -10,6 +10,10 @@ import sqlalchemy as sa
 from sqlalchemy import BigInteger, Boolean, ForeignKey, String, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from sqlalchemy.dialects.postgresql import JSONB, TIMESTAMP
+from sqlalchemy import Column, Integer, String, Date, DateTime, Text, ForeignKey, func
+from sqlalchemy.dialects.postgresql import JSONB   # если используешь JSONB в модели
+from sqlalchemy.orm import relationship
+
 
 from .base import Base
 from sqlalchemy import (
@@ -37,8 +41,27 @@ class User(Base):
         cascade="all, delete-orphan",
         passive_deletes=True,
     )
+    numerology_profiles: Mapped[List["NumerologyProfile"]] = relationship(
+        back_populates="user",
+        cascade="all, delete-orphan",
+    )
 
     dreams: Mapped[List["Dream"]] = relationship(back_populates="user")
+
+class NumerologyProfile(Base):
+    __tablename__ = "numerology_profiles"
+
+    id = Column(Integer, primary_key=True)
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    full_name = Column(String(255), nullable=False)
+    birth_date = Column(Date, nullable=False)
+    gender = Column(String(20), nullable=True)
+    report_html = Column(Text, nullable=False)
+    report_json = Column(JSONB, nullable=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+
+    # ОСТАВИТЬ только это:
+    user = relationship("User", back_populates="numerology_profiles")
    
 class Dream(Base):
     __tablename__ = "dreams"

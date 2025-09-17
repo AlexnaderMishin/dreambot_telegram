@@ -8,6 +8,7 @@ REMIND_BTN = "🔔 Напоминания"
 def main_kb() -> ReplyKeyboardMarkup:
     kb = ReplyKeyboardBuilder()
     kb.button(text="✍ Записать сон")
+    kb.button(text="✍ Нумерология")
     kb.button(text="📊 Статистика")
     kb.button(text="📜 Мои сны")
     kb.button(text=REMIND_BTN)     # <- используем константу
@@ -37,3 +38,4 @@ def kb_premium() -> ReplyKeyboardMarkup:
     kb.button(text="⬅️ Назад")
     kb.adjust(1, 1, 1)
     return kb.as_markup(resize_keyboard=True)
+

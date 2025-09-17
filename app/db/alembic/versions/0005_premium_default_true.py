@@ -4,7 +4,7 @@ import sqlalchemy as sa
 
 # revision identifiers, used by Alembic.
 revision = "0005_premium_default_true"
-down_revision = "<0004_add_remind_time>"  # замените на актуальный down_revision
+down_revision = "0004_add_remind_time"  # замените на актуальный down_revision
 branch_labels = None
 depends_on = None
 

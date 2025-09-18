@@ -6,12 +6,37 @@ from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.cron import CronTrigger
 from sqlalchemy import text
 from app.db.base import SessionLocal
+from app.jobs.astrology_notifications import (
+    check_moon_phase_changes,
+    send_daily_astro_ping,
+)
+# app/bot/reminders.py
+from apscheduler.schedulers.asyncio import AsyncIOScheduler
 
+# ГЛОБАЛЬНЫЙ планировщик этого модуля (экспортируемый)
+scheduler = AsyncIOScheduler(timezone="UTC")
 import pytz
 
 scheduler = AsyncIOScheduler(timezone="UTC")
 JOB_PREFIX = "remind_user_"
+# глобальные задачи (работают для всех пользователей)
+scheduler.add_job(
+    check_moon_phase_changes,
+    trigger="cron",
+    minute="*/30",
+    kwargs={"bot": None, "session_maker": SessionLocal},
+    id="moon_phase_changes",
+    replace_existing=True,
+)
 
+scheduler.add_job(
+    send_daily_astro_ping,
+    trigger="cron",
+    minute="*/5",
+    kwargs={"bot": None, "session_maker": SessionLocal},
+    id="daily_astro_ping",
+    replace_existing=True,
+)
 
 def _job_id(user_id: int) -> str:
     return f"{JOB_PREFIX}{user_id}"
@@ -55,10 +80,10 @@ def unschedule_for_user(user_id: int) -> None:
         pass
 
 
+
 def bootstrap_existing(bot: Bot) -> None:
     """
     Поднимаем задачи из БД для всех, у кого remind_enabled = true.
-    ВАЖНО: это синхронная функция, её вызываем БЕЗ await.
     """
     with SessionLocal() as s:
         rows = s.execute(
@@ -72,10 +97,18 @@ def bootstrap_existing(bot: Bot) -> None:
         ).fetchall()
 
     for r in rows:
-        # в БД хранится часовой пояс, а время может быть в колонке remind_time (при желании подтяни)
-        # запускаем на дефолтное 08:30, если у пользователя ещё нет времени.
         t_str = "08:30"
         schedule_for_user(bot, r.id, r.tg_id, r.tz, t_str)
+
+    # <<< ДОБАВЬ ЭТО: подставляем bot в глобальные джобы >>>
+    try:
+        scheduler.modify_job("moon_phase_changes", kwargs={"bot": bot, "session_maker": SessionLocal})
+    except Exception:
+        pass
+    try:
+        scheduler.modify_job("daily_astro_ping", kwargs={"bot": bot, "session_maker": SessionLocal})
+    except Exception:
+        pass
 
 
 def toggle_remind(user_id: int, enabled: bool) -> None:

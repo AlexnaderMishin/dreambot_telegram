@@ -15,7 +15,7 @@ router = Router(name="numerology")
 class Form(StatesGroup):
     wait_data = State()  # ожидаем строку: "ФИО; ДД.ММ.ГГГГ"
 
-@router.message(F.text.in_({"✍ Нумерология", "Нумерология", "/numerology"}))
+@router.message(F.text.in_({"🔢 Нумерология", "Нумерология", "/numerology"}))
 async def entry(msg: Message, state: FSMContext):
     await state.set_state(Form.wait_data)
     await msg.answer(

@@ -33,6 +33,10 @@ class User(Base):
     remind_enabled = Column(Boolean, nullable=False, server_default="false")
     premium_expires_at = Column(DateTime(timezone=True), nullable=True)
     remind_time = Column(Time, nullable=True, default=time(8, 30))  # локальное время пользователя
+    notify_moon_phase = sa.Column(sa.Boolean, nullable=False, server_default=sa.text("true"))
+    notify_daily_time = sa.Column(sa.Text, nullable=True)
+    last_moon_phase   = sa.Column(sa.Text, nullable=True)
+    last_moon_day     = sa.Column(sa.Integer, nullable=True)
 
     # >>> ДОБАВЬ ЭТУ СТРОКУ (встречная связь для платежей)
     payments = relationship(

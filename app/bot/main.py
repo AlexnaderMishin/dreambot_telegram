@@ -25,6 +25,8 @@ from app.bot.handlers.dreams import router as dreams_router
 from app.bot.handlers.stats import router as stats_router
 #нумерология
 from app.bot.handlers import numerology
+#астрология
+from app.bot.handlers.astrology import router as astrology_router
 
 class DreamForm(StatesGroup):
     awaiting_text = State()
@@ -132,10 +134,11 @@ async def main() -> None:
     bot = Bot(token, default=DefaultBotProperties(parse_mode=ParseMode.HTML))
     dp = Dispatcher()
 
-    dp.include_router(payments_router)
+    # dp.include_router(payments_router)
     dp.include_router(stats_router)
     dp.include_router(dreams_router)
     dp.include_router(numerology.router)
+    dp.include_router(astrology_router)
     dp.include_router(remind_router)
     dp.include_router(router)
 

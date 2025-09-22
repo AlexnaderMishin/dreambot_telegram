@@ -38,6 +38,9 @@ async def _analyze_and_reply(m: Message, text: str, user: User) -> None:
     Премиум-единственный путь: сохраняем сон и отвечаем через premium_analysis().
     Никакого базового локального анализа больше не делаем.
     """
+    html = premium_analysis(text)
+    from app.core.premium import extract_symbols_emotions
+    symbols, emotions = extract_symbols_emotions(html)
     # сохраняем сон сразу
     with SessionLocal() as s:
         db_user = s.query(User).filter_by(id=user.id).one()
@@ -45,15 +48,15 @@ async def _analyze_and_reply(m: Message, text: str, user: User) -> None:
             user_id=db_user.id,
             text=text,
             # поля базового анализа больше не заполняем
-            symbols=None,
-            emotions=None,
+            symbols=symbols,
+            emotions=emotions,
             actions=None,
         )
         s.add(dream)
         s.commit()
 
     # всегда отвечаем премиум-разбором (api или stub — управляется PREMIUM_MODE)
-    html = premium_analysis(text)
+    
     await m.answer(html, parse_mode=ParseMode.HTML)
 
 @router.message(Command("start"))

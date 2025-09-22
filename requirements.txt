@@ -8,7 +8,8 @@ pydantic==2.8.2  # важно: aiogram 3.12 несовместим с 2.9+
 python-dotenv==1.0.1
 redis==5.0.8
 loguru==0.7.2
-
+pymorphy2==0.9.1
+pymorphy2-dicts-ru==2.4.417127.4579844
 # Этапы 2+ (пока закомментируем, чтобы не мешали сборке)
 APScheduler==3.10.4
 pytz==2024.1
